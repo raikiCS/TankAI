@@ -7,6 +7,7 @@ import visualize
 import pickle
 pygame.font.init()  # init font
 
+
 """
 Load a bunch of images
 """
@@ -151,8 +152,9 @@ def main(genomes, config):
         win = pygame.display.set_mode((480, 416))
         loadLevel()
         run = True
-        tank = Tank(16 * TILE_SIZE, 24 * TILE_SIZE)
-        enemy = Enemy(random.randrange(1, 10, 1) * 4 * TILE_SIZE, random.randrange(1, 10, 1) * 4 * TILE_SIZE)
+        tank = Tank(16 * TILE_SIZE, 16 * TILE_SIZE)
+        #enemy = Enemy(random.randrange(1, 10, 1) * 4 * TILE_SIZE, random.randrange(1, 10, 1) * 4 * TILE_SIZE)
+        enemy = Enemy(4 * TILE_SIZE, 4 * TILE_SIZE)
         tanks = [tank, enemy]
         totaltime = 0
         enemy.health = 200
@@ -160,8 +162,9 @@ def main(genomes, config):
         previous_tank_health = tank.health
 
         while run:
-
-            #enemy.update()
+            
+            pygame.event.get()
+            enemy.update(tank)
 
             #keys = pygame.key.get_pressed()
             #update_level()
@@ -189,21 +192,26 @@ def main(genomes, config):
                 elif keys[pygame.K_g]:
                     tank.fire()
             """
-            
+            if enemy.line_sight(tank):
+                genome.fitness -= 5
+
+            if (abs(tank.position.x - enemy.position.x) <= 8) or (abs(tank.position.y - enemy.position.y) <= 8):
+                genome.fitness += 1
 
             #genome.fitness += 0.01
             if tank.collide(tank.direction):
                 genome.fitness -= 1
 
             if previous_enemy_health > enemy.health:
-                genome.fitness += 0.5
+                genome.fitness += 5
                 previous_enemy_health = enemy.health
 
             if previous_tank_health > tank.health:
-                genome.fitness -= 1
+                genome.fitness -= 5
                 previous_tank_health = tank.health
 
-            output = net.activate((abs(tank.position.x - enemy.position.x), abs(tank.position.y - enemy.position.y), tank.collided))
+
+            output = net.activate((abs(tank.position.x - enemy.position.x), abs(tank.position.y - enemy.position.y)))
             #print(output)
             """
             if -1 <= output[0] <= -0.4:
@@ -222,8 +230,10 @@ def main(genomes, config):
                 tank.fire()
             """
 
-            action = output.index(max(output))
 
+            action = output.index(max(output))
+            
+            #print(output)
             if action == 0:
                 tank.fire()
             elif action == 1:
@@ -234,6 +244,20 @@ def main(genomes, config):
                 tank.rotate(2)
             elif action == 4:
                 tank.rotate(3)
+            
+            if random.randrange(0, 2, 1) > 0:
+                #action = random.randrange(0, 5, 1)
+                if action == 0:
+                    tank.fire()
+                elif action == 1:
+                    tank.rotate(0)
+                elif action == 2:
+                    tank.rotate(1)
+                elif action == 3:
+                    tank.rotate(2)
+                elif action == 4:
+                    tank.rotate(3)
+
             """
             if output[0] > 0.2:
                 tank.fire()
@@ -255,7 +279,7 @@ def main(genomes, config):
                 break
             
             if enemy.state == 1:
-                genome.fitness += 1000
+                genome.fitness += 100
                 run == False
                 #quit()
                 break
@@ -272,6 +296,7 @@ class Tank:
 
     def __init__(self, position_x, position_y):
         self.health = 100
+        #originally speed = 2
         self.speed = 2
         self.max_active_bullets = 1
         self.image = img_tanks[0]
@@ -336,19 +361,44 @@ class Tank:
                     self.position.top = tile.bottom
                     #self.position.y += 2
                 self.collided = True
+                #try to open path when collide
+                if(random.randint(0, 1)==1):
+                    self.direction = random.randint(0, 3)
+                else:
+                    self.fire()
                 return True
 
                 if direction == self.DIR_UP and (self.position.y - 2) > 32:
                     self.collided = True
+                    #try to open path when collide
+                    if(random.randint(0, 1)==1):
+                        self.direction = random.randint(0, 3)
+                    else:
+                        self.fire()
                     return True
                 elif direction == self.DIR_RIGHT and (self.position.x + 2) < (416 - 26):
                     self.collided = True
+                    #try to open path when collide
+                    if(random.randint(0, 1)==1):
+                        self.direction = random.randint(0, 3)
+                    else:
+                        self.fire()
                     return True
                 elif direction == self.DIR_DOWN and (self.position.y + 2) < (416 - 26):
                     self.collided = True
+                    #try to open path when collide
+                    if(random.randint(0, 1)==1):
+                        self.direction = random.randint(0, 3)
+                    else:
+                        self.fire()
                     return True
                 elif direction == self.DIR_LEFT and (self.position.x - 2) > 0:
                     self.collided = True
+                    #try to open path when collide
+                    if(random.randint(0, 1)==1):
+                        self.direction = random.randint(0, 3)
+                    else:
+                        self.fire()
                     return True
 
         self.collided = False
@@ -360,9 +410,9 @@ class Tank:
                 if bullet.owner != self.player:
                     bullet.state = 0
                     if bullet.owner != 0:
-                        self.health -= bullet.damage + 5
-                    else:
                         self.health -= bullet.damage
+                    else:
+                        self.health -= bullet.damage + 2
         if self.health < 0:
             self.state = self.STATE_DEAD
             if self.player == 0:
@@ -379,10 +429,11 @@ class Bullet:
 
     def __init__(self, position, direction, owner):
         self.direction = direction
-        self.damage = 0.1
+        self.damage = 5
         self.owner = owner
         self.image = bullet_img
         self.state = self.STATE_ACTIVE
+        #originally 8
         self.speed = 8
         self.tanks = tanks
 
@@ -411,9 +462,9 @@ class Bullet:
     def update(self):
         if (self.rect.y - 2) < 32:
             self.state = 0
-        elif (self.rect.x + 2) > (416 - 26):
+        elif (self.rect.x + 2) > (416):
             self.state = 0
-        elif (self.rect.y + 2) > (416 - 26):
+        elif (self.rect.y + 2) > (416):
             self.state = 0
         elif (self.rect.x - 2) < 0:
             self.state = 0
@@ -444,8 +495,6 @@ class Bullet:
         return
 
 
-
-
 class Enemy(Tank):
     def __init__(self, position_x, position_y):
         Tank.__init__(self, position_x, position_y)
@@ -455,9 +504,12 @@ class Enemy(Tank):
         self.image_down = pygame.transform.rotate(self.image, 180)
         self.image_right = pygame.transform.rotate(self.image, 270)
         self.player = 1
+        self.rand_move = 0
+        self.start_ticks = pygame.time.get_ticks()
+        self.randomMovementCount = 1
 
-    def update(self):
-
+    def update(self, tank):
+        """
 
         if self.collide(self.direction) or ((self.position.y - 2) > 32) or ((self.position.x + 2) < (416 - 26)) or ((self.position.y + 2) < (416 - 26)) or ((self.position.x - 2) > 0):
             self.rotate(random.randrange(0, 4, 1))
@@ -468,8 +520,70 @@ class Enemy(Tank):
         else:
             self.fire()
             
+        """
+        
+
+        if self.line_sight(tank) and ((abs(tank.position.x - self.position.x) + abs(tank.position.y - self.position.y))  >= 32):
+            #self.rotate(random.randrange(0, 4, 1))
+            self.fire()
+        else:
+            if ((pygame.time.get_ticks()-self.start_ticks)/1000) > 0.01:
+                self.randomMovementCount = self.randomMovementCount - 1
+                if (self.randomMovementCount==0):
+                    self.randomMovementCount = random.randrange(1, 40, 1)
+                    self.direction = random.randint(0, 3)
+                    self.rotate(self.direction)
+                    self.rotate(self.direction)
+                    self.rotate(self.direction)
+                    self.rotate(self.direction)
+                else:                    
+                    self.rotate(self.direction)
+                    self.rotate(self.direction)
+                    self.rotate(self.direction)
+                    self.rotate(self.direction)
+                    if (random.randrange(0, 5, 1)==1):
+                        self.fire() #chance of firing randomly
+                self.start_ticks = pygame.time.get_ticks()
+
+        """
+        else:
+            self.rotate(random.randrange(0, 4, 1))
+            self.rotate(self.direction)
+            self.rotate(self.direction)
+            self.rotate(self.direction)
+            self.rotate(self.direction)
+            self.fire()
+            self.rand_move = 0
+        """
 
 
+
+
+    def line_sight(self, tank):
+        if (abs(tank.position.x - self.position.x) <= 10):
+            if (tank.direction == 0 or tank.direction == 1 or tank.direction == 3):
+                if (self.direction == 2) and ((self.position.y - tank.position.y) <= 0):
+                    return True
+                elif (self.direction == 0) and ((self.position.y - tank.position.y) >= 0):
+                    return True
+            if (tank.direction == 2 or tank.direction == 1 or tank.direction == 3):
+                if (self.direction == 0) and ((self.position.y - tank.position.y) >= 0):
+                    return True
+                elif (self.direction == 2) and ((self.position.y - tank.position.y) <= 0):
+                    return True
+        elif (abs(tank.position.y - self.position.y) <= 10):
+            if (tank.direction == 1 or tank.direction == 0 or tank.direction == 2):
+                if (self.direction == 3) and ((self.position.x - tank.position.x) >= 0):
+                    return True
+                elif (self.direction == 1) and ((self.position.x - tank.position.x) <= 0):
+                    return True
+            if (tank.direction == 3 or tank.direction == 0 or tank.direction == 2):
+                if (self.direction == 1) and ((self.position.x - tank.position.x) <= 0):
+                    return True
+                elif (self.direction == 3) and ((self.position.x - tank.position.x) >= 0):
+                    return True
+        
+        return False
 
 
 
@@ -485,7 +599,7 @@ def run(config_path):
     p.add_reporter(stats)
 
     #running fitness function
-    winner = p.run(main, 20)
+    winner = p.run(main, 5)
     print('\nBest genome:\n{!s}'.format(winner))
 
 if __name__ == "__main__":
